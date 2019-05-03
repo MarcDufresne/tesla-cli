@@ -19,6 +19,12 @@ def format_bool_value(value: Union[str, int, bool], val_true: str, val_false: st
     return val_true if parsed_value else val_false
 
 
+def format_duration(hours: float) -> str:
+    minutes = int(hours * 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m"
+
+
 def print_table(rows: List[str], title: str = None):
     if title:
         click.echo(title)

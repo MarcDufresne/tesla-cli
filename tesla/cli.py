@@ -6,7 +6,7 @@ import click
 import tesla_api
 import yaml
 
-from tesla.cli_utils import format_distance_unit, format_bool_value, print_table, debug_print
+from tesla.cli_utils import format_distance_unit, format_bool_value, format_duration, print_table, debug_print
 
 
 _client = None
@@ -33,16 +33,19 @@ def wait_until_online_or_raise(vehicle: tesla_api.Vehicle, retry_timeout: int = 
         for attempt_nb in range(max_attempts):
             click.secho(f"{vehicle.display_name} is {state}, waiting for it to wake up...", fg="blue")
             try:
-                if attempt_nb % 10 == 0:
+                if (attempt_nb + 1) % 10 == 0:
                     click.secho("Calling wake up again...", fg="yellow")
                     vehicle.wake_up()
-                state = get_vehicle(_vehicle.vin).state
-                break
-            except Exception:
-                if attempt_nb >= max_attempts:
-                    raise Exception("Vehicle Connection Error")
+                state = get_vehicle(vehicle.vin).state
+                if state != "online":
+                    raise Exception("State is not online")
+            except Exception as e:
+                if attempt_nb >= max_attempts - 1:
+                    raise Exception(f"Vehicle Connection Error, {e}")
                 sleep(retry_timeout)
                 continue
+            else:
+                break
 
     click.secho(f"{vehicle.display_name} is {state}!", fg="green")
 
@@ -156,14 +159,17 @@ def charge_state(ctx):
     if ctx.obj['DEBUG']:
         debug_print(charge_info)
 
+    kwh_charge_rate = charge_info['charger_voltage'] * charge_info['charger_actual_current'] / 1000
+
     lines = [
-        f"Battery:        {charge_info['battery_level']}%",
-        f"Usable Battery: {charge_info['usable_battery_level']}%",
-        f"Rated Range:    {format_distance_unit(charge_info['battery_range'], _display_unit)}",
-        f"Est. Range:     {format_distance_unit(charge_info['est_battery_range'], _display_unit)}",
-        f"Charge State:   {charge_info['charging_state']}",
-        f"Charge Rate:    {charge_info['charge_rate']} kWh",
-        f"Remaining Time: {charge_info['time_to_full_charge']} h",
+        f"Battery:               {charge_info['battery_level']}%",
+        f"Usable Battery:        {charge_info['usable_battery_level']}%",
+        f"Rated Range:           {format_distance_unit(charge_info['battery_range'], _display_unit)}",
+        f"Est. Range:            {format_distance_unit(charge_info['est_battery_range'], _display_unit)}",
+        f"Charge State:          {charge_info['charging_state']}",
+        f"Charge Rate (Range):   {format_distance_unit(charge_info['charge_rate'], _display_unit)}/h",
+        f"Charge Rate (Current): {kwh_charge_rate} kWh",
+        f"Remaining Time:        {format_duration(charge_info['time_to_full_charge'])}",
     ]
 
     print_table(lines, title="Charge State")
